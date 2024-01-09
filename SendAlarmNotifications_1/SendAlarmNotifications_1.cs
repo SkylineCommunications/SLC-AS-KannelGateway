@@ -104,9 +104,7 @@ namespace SendAlarmNotifications_1
             string telephoneNumbers = ConcatenateTelephoneNumbers();
             string message = ComposeMessage();
 
-            string url = $"http://{ipAddress}:{port}/cgi-bin/sendsms?username={username}&password={password}&to={telephoneNumbers}&text={message}";
-
-            return HttpUtility.UrlEncode(url, Encoding.UTF8);
+            return $"http://{ipAddress}:{port}/cgi-bin/sendsms?username={username}&password={password}&to={telephoneNumbers}&text={message}";
         }
 
         private void SendGetRequest()
