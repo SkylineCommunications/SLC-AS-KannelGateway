@@ -5,6 +5,7 @@ namespace SendAlarmNotifications_1
 	using System.Globalization;
     using System.Net.Http;
     using System.Text;
+    using System.Web;
     using Newtonsoft.Json;
     using Skyline.DataMiner.Automation;
     using Skyline.DataMiner.Net;
@@ -42,12 +43,10 @@ namespace SendAlarmNotifications_1
                 var response = engine.SendSLNetMessage(alarmMsg);
                 alarmDetails = (response.Length > 0 ? response[0] as AlarmEventMessage : null) ??
                     throw new Exception("Couldn't retrieve the alarm details");
-                engine.GenerateInformation($"DEBUG:The alarm description is \"{alarmDetails.Description}\"");
 
                 RetrieveUserInfo(engine);
                 FilterOutTelephoneNumbers();
-                ComposeUrl(engine);
-                //SendGetRequest();
+                SendGetRequest();
             }
             catch (Exception ex)
             {
@@ -90,7 +89,9 @@ namespace SendAlarmNotifications_1
 
         private string ComposeMessage()
         {
-            return $@"Active alarm: {alarmDetails.Severity} - {alarmDetails.ElementName} - {alarmDetails.Description} - {alarmDetails.Value} - {alarmDetails.RootTime}";
+            string message = $@"{alarmDetails.Severity} alarm: {alarmDetails.ElementName} - Description: {alarmDetails.ParameterName} - Value: {alarmDetails.DisplayValue} - Time: {alarmDetails.RootTime}";
+
+            return HttpUtility.UrlEncode(message, Encoding.UTF8);
         }
 
         private string ConcatenateTelephoneNumbers()
@@ -98,28 +99,26 @@ namespace SendAlarmNotifications_1
             return string.Join("%20", allTelephoneNumbers);
         }
 
-        private string ComposeUrl(IEngine engine)
+        private string ComposeUrl()
         {
             string telephoneNumbers = ConcatenateTelephoneNumbers();
             string message = ComposeMessage();
 
             string url = $"http://{ipAddress}:{port}/cgi-bin/sendsms?username={username}&password={password}&to={telephoneNumbers}&text={message}";
 
-            engine.GenerateInformation($"DEBUG:The alarm description is \"{alarmDetails.Description}\"");
-
-            return url;
+            return HttpUtility.UrlEncode(url, Encoding.UTF8);
         }
 
-        //private void SendGetRequest()
-        //{
-        //    using (var client = new HttpClient())
-        //    {
-        //        var composedUri = ComposeUrl();
+        private void SendGetRequest()
+        {
+            using (var client = new HttpClient())
+            {
+                var composedUri = ComposeUrl();
 
-        //        var endPoint = new Uri(composedUri);
-        //        var result = client.GetAsync(endPoint).Result;
-        //        var temp = result.Content.ReadAsStringAsync().Result;
-        //    }
-        //}
+                var endPoint = new Uri(composedUri);
+                var result = client.GetAsync(endPoint).Result;
+                var temp = result.Content.ReadAsStringAsync().Result;
+            }
+        }
     }
 }
