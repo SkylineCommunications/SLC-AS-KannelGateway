@@ -2,13 +2,12 @@ namespace SendAlarmNotifications_1
 {
 	using System;
 	using System.Collections.Generic;
-	using System.Globalization;
     using System.Net.Http;
     using System.Text;
+    using System.Threading;
     using System.Web;
     using Newtonsoft.Json;
     using Skyline.DataMiner.Automation;
-    using Skyline.DataMiner.Net;
     using Skyline.DataMiner.Net.Messages;
 
     /// <summary>
@@ -39,14 +38,17 @@ namespace SendAlarmNotifications_1
                 var alarm = CorrelatedAlarmInfo.FromCorrelatedInfo(alarmInfo);
                 engine.GenerateInformation($"DEBUG: {JsonConvert.SerializeObject(alarm, Formatting.Indented)}");
 
-                GetAlarmDetailsMessage alarmMsg = new GetAlarmDetailsMessage(-1, -1, new int[] { alarm.AlarmId });
-                var response = engine.SendSLNetMessage(alarmMsg);
-                alarmDetails = (response.Length > 0 ? response[0] as AlarmEventMessage : null) ??
-                    throw new Exception("Couldn't retrieve the alarm details");
+                RetrieveAlarmDetails(engine, alarm);
+
+                if (alarmDetails == null)
+                {
+                    engine.GenerateInformation($"Couldn't retrieve the alarm details");
+                    return;
+                }
 
                 RetrieveUserInfo(engine);
                 FilterOutTelephoneNumbers();
-                SendGetRequest();
+                SendGetRequest(engine);
             }
             catch (Exception ex)
             {
@@ -65,6 +67,23 @@ namespace SendAlarmNotifications_1
             {
                 engine.GenerateInformation($"DEBUG: One of the input parameters is not valid");
                 return;
+            }
+        }
+
+        private void RetrieveAlarmDetails(IEngine engine, CorrelatedAlarmInfo alarm, int maxRetries = 10)
+        {
+            int retries = 0;
+
+            while (retries < maxRetries && alarmDetails == null)
+            {
+                Thread.Sleep(250);
+
+                GetAlarmDetailsMessage alarmMsg = new GetAlarmDetailsMessage(-1, -1, new int[] { alarm.AlarmId });
+                var response = engine.SendSLNetMessage(alarmMsg);
+
+                alarmDetails = response.Length > 0 ? response[0] as AlarmEventMessage : null;
+
+                retries++;
             }
         }
 
@@ -96,7 +115,9 @@ namespace SendAlarmNotifications_1
 
         private string ConcatenateTelephoneNumbers()
         {
-            return string.Join("%20", allTelephoneNumbers);
+            var concatenatedTelephoneNumbers = string.Join(" ", allTelephoneNumbers);
+
+            return HttpUtility.UrlEncode(concatenatedTelephoneNumbers, Encoding.UTF8);
         }
 
         private string ComposeUrl()
@@ -107,15 +128,19 @@ namespace SendAlarmNotifications_1
             return $"http://{ipAddress}:{port}/cgi-bin/sendsms?username={username}&password={password}&to={telephoneNumbers}&text={message}";
         }
 
-        private void SendGetRequest()
+        private void SendGetRequest(IEngine engine)
         {
             using (var client = new HttpClient())
             {
                 var composedUri = ComposeUrl();
 
+                engine.GenerateInformation($"Passed URL: {composedUri}");
+
                 var endPoint = new Uri(composedUri);
                 var result = client.GetAsync(endPoint).Result;
-                var temp = result.Content.ReadAsStringAsync().Result;
+                var stringResult = result.Content.ReadAsStringAsync().Result;
+
+                engine.GenerateInformation($"Send Alarm Notifications | URL Response: {stringResult}");
             }
         }
     }
