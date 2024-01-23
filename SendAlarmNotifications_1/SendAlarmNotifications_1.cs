@@ -36,7 +36,6 @@ namespace SendAlarmNotifications_1
 
                 var alarmInfo = engine.GetScriptParam(65006).Value;
                 var alarm = CorrelatedAlarmInfo.FromCorrelatedInfo(alarmInfo);
-                engine.GenerateInformation($"DEBUG: {JsonConvert.SerializeObject(alarm, Formatting.Indented)}");
 
                 RetrieveAlarmDetails(engine, alarm);
 
@@ -134,13 +133,14 @@ namespace SendAlarmNotifications_1
             {
                 var composedUri = ComposeUrl();
 
-                engine.GenerateInformation($"Passed URL: {composedUri}");
-
                 var endPoint = new Uri(composedUri);
                 var result = client.GetAsync(endPoint).Result;
                 var stringResult = result.Content.ReadAsStringAsync().Result;
 
-                engine.GenerateInformation($"Send Alarm Notifications | URL Response: {stringResult}");
+                if (!stringResult.Contains("0: Accepted for delivery"))
+                {
+                    engine.GenerateInformation($"Send Alarm Notifications | Request URL: {composedUri} Response: {stringResult}");
+                }
             }
         }
     }
